@@ -1,0 +1,44 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(*)",
+      "Write(src/**)",
+      "Write(tests/**)",
+      "Write(docs/**)",
+      "Write(*.md)",
+      "Write(*.json)",
+      "Write(*.yaml)",
+      "Edit(*)",
+      "Bash(npm *)",
+      "Bash(pnpm *)",
+      "Bash(yarn *)",
+      "Bash(node *)",
+      "Bash(npx *)",
+      "Bash(python *)",
+      "Bash(pip *)",
+      "Bash(pytest *)",
+      "Bash(git *)",
+      "Bash(mkdir *)",
+      "Bash(touch *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(cat *)",
+      "Bash(ls *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(echo *)",
+      "Bash(curl *)",
+      "Bash(wget *)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf .)",
+      "Bash(sudo *)",
+      "Bash(chmod 777 *)",
+      "Write(.env)",
+      "Write(.env.*)",
+      "Write(**/secrets/**)"
+    ]
+  }
+}

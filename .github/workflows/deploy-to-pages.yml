@@ -1,0 +1,146 @@
+name: Deploy to GitHub Pages
+
+on:
+  # 在 hotsearch-analyze 完成后触发
+  workflow_run:
+    workflows: ["Daily Hotsearch Analysis"]
+    types:
+      - completed
+
+  # 手动触发
+  workflow_dispatch:
+
+# 设置 GITHUB_TOKEN 权限
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 只允许一个并发部署
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # 只在前置工作流成功时运行
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: master  # 确保获取最新代码
+
+      - name: Pull latest changes
+        run: git pull origin master
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Prepare deploy directory
+        run: |
+          mkdir -p _site
+
+          # 复制最新报告作为首页
+          if [ -f "reports/latest.html" ]; then
+            cp reports/latest.html _site/index.html
+          elif [ -f "omni-hotsearch-report.html" ]; then
+            cp omni-hotsearch-report.html _site/index.html
+          fi
+
+          # 复制所有历史报告
+          if [ -d "reports" ]; then
+            cp -r reports _site/
+          fi
+
+          # 生成报告列表页面
+          cat > _site/history.html << 'HTMLEOF'
+          <!DOCTYPE html>
+          <html lang="zh-CN">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>热搜分析报告 - 历史记录</title>
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+                min-height: 100vh;
+                padding: 40px 20px;
+                color: #fff;
+              }
+              .container {
+                max-width: 800px;
+                margin: 0 auto;
+              }
+              h1 {
+                text-align: center;
+                margin-bottom: 40px;
+                font-size: 2rem;
+                background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+              }
+              .report-list {
+                list-style: none;
+              }
+              .report-item {
+                background: rgba(255,255,255,0.1);
+                backdrop-filter: blur(10px);
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 15px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                transition: transform 0.2s, background 0.2s;
+              }
+              .report-item:hover {
+                transform: translateX(10px);
+                background: rgba(255,255,255,0.15);
+              }
+              .report-item a {
+                color: #00d2ff;
+                text-decoration: none;
+                font-weight: 500;
+              }
+              .back-link {
+                display: block;
+                text-align: center;
+                margin-top: 40px;
+                color: #888;
+              }
+              .back-link a { color: #00d2ff; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>📊 热搜分析报告 - 历史记录</h1>
+              <ul class="report-list" id="reportList">
+                <li class="report-item">正在加载报告列表...</li>
+              </ul>
+              <p class="back-link"><a href="index.html">← 返回最新报告</a></p>
+            </div>
+          </body>
+          </html>
+          HTMLEOF
+
+          echo "Deploy directory contents:"
+          ls -la _site/
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_site'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

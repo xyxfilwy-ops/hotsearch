@@ -1,4 +1,4 @@
-name: Daily Hotsearch Analysis
+name: Hotsearch Analysis & Deploy
 
 on:
   # 定时触发：北京时间每天 6:00 和 18:00
@@ -15,16 +15,25 @@ on:
         default: '15'
         type: string
 
+# 权限设置
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# 只允许一个并发部署
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 env:
   NODE_VERSION: '20'
   MAX_TOPICS: ${{ github.event.inputs.max_topics || '15' }}
 
 jobs:
-  hotsearch-analysis:
+  # Job 1: 分析热搜并生成报告
+  analyze:
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: write  # 用于推送 HTML 报告到仓库
 
     steps:
       - name: Checkout repository
@@ -40,37 +49,74 @@ jobs:
 
       - name: Run Hotsearch Analysis Agent
         env:
-          # 第三方 API 配置
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
           ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL || 'claude-opus-4-5-20251101' }}
-          # 天行数据 API
           TIANAPI_KEY: ${{ secrets.TIANAPI_KEY }}
           MAX_TOPICS: ${{ env.MAX_TOPICS }}
         run: node .github/scripts/hotsearch-agent.mjs
 
-      - name: Upload HTML Report as Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: hotsearch-report-${{ github.run_number }}
-          path: omni-hotsearch-report.html
-          retention-days: 30
+      - name: Prepare reports
+        run: |
+          mkdir -p reports
+          DATE=$(date +%Y-%m-%d-%H%M)
+          cp omni-hotsearch-report.html "reports/hotsearch-report-${DATE}.html"
+          cp omni-hotsearch-report.html "reports/latest.html"
 
-      - name: Commit and Push Report (Optional)
+      - name: Commit reports to repository
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-
-          # 创建 reports 目录存放历史报告
-          mkdir -p reports
-
-          # 复制报告并添加日期后缀
-          DATE=$(date +%Y-%m-%d)
-          cp omni-hotsearch-report.html "reports/hotsearch-report-${DATE}.html"
-
-          # 同时保留一份最新版本
-          cp omni-hotsearch-report.html "reports/latest.html"
-
           git add reports/
-          git diff --staged --quiet || git commit -m "chore: update hotsearch report ${DATE}"
+          git diff --staged --quiet || git commit -m "chore: update hotsearch report $(date +%Y-%m-%d)"
           git push
+
+      - name: Upload artifact for Pages
+        uses: actions/upload-artifact@v4
+        with:
+          name: hotsearch-report
+          path: reports/
+          retention-days: 30
+
+  # Job 2: 部署到 GitHub Pages
+  deploy:
+    needs: analyze
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Pull latest changes
+        run: git pull origin master
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Prepare deploy directory
+        run: |
+          mkdir -p _site
+
+          # 复制最新报告作为首页
+          cp reports/latest.html _site/index.html
+
+          # 复制所有历史报告
+          cp -r reports _site/
+
+          echo "Deploy contents:"
+          ls -la _site/
+
+      - name: Upload to Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_site'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

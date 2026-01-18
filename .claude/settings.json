@@ -1,4 +1,10 @@
 {
+  "skills": {
+    "hotsearch": {
+      "description": "全网热搜产品创意分析（自动抓取 + 联网检索 + 评分 + HTML报告）",
+      "path": ".claude/skills/omni-hotsearch-ideation"
+    }
+  },
   "permissions": {
     "allow": [
       "Read(*)",
